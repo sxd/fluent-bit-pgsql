@@ -1,6 +1,6 @@
 # Fluent Bit Plugin pgsql
 
-The fallowing repository provides a plugin to send logs to a PostgreSQL database.
+The following repository provides a plugin to send logs to a PostgreSQL database.
 
 ## Requirements
 
