@@ -109,11 +109,19 @@ static void cb_pgsql_flush(const void *data, size_t bytes,
         FLB_OUTPUT_RETURN(FLB_ERROR);
     }
 
+    PQclear(res);
+
     FLB_OUTPUT_RETURN(FLB_OK);
 }
 
 static int cb_pgsql_exit(void *data, struct flb_config *config)
 {
+    struct flb_pgsql_config *ctx = data;
+
+    PQfinish(ctx->conn);
+
+    flb_free(ctx);
+
     return 0;
 }
 
