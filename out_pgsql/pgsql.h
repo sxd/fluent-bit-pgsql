@@ -28,6 +28,7 @@
 #define FLB_PGSQL_HOST "127.0.0.1"
 #define FLB_PGSQL_PORT 5432
 #define FLB_PGSQL_DBNAME "fluentbit"
+#define FLB_PGSQL_TABLE "fluentbit"
 
 const PGconn *conn;
 
@@ -37,6 +38,7 @@ struct flb_pgsql_config {
     char *db_hostname;
     char db_port[5];
     const char *db_name;
+    const char *db_table;
 
     /* auth */
     const char *db_user;

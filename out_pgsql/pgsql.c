@@ -48,7 +48,18 @@ static int cb_pgsql_init(struct flb_output_instance *ins,
 
     ctx->db_hostname = flb_strdup(ins->host.name);
     snprintf(ctx->db_port, sizeof(ctx->db_port), "%d", ins->host.port);
+
+
     ctx->db_name = flb_output_get_property("database", ins); /* it should be dbname, may need a fix */
+    if(!ctx->db_name) {
+        ctx->db_name = FLB_PGSQL_DBNAME;
+    }
+
+    ctx->db_table = flb_output_get_property("table", ins);
+    if(!ctx->db_table) {
+        ctx->db_table = FLB_PGSQL_TABLE;
+    }
+
     ctx->db_user = flb_output_get_property("user", ins);
     ctx->db_passwd = flb_output_get_property("passwd", ins);
 
@@ -89,7 +100,7 @@ static void cb_pgsql_flush(const void *data, size_t bytes,
                                            flb_sds_create("date"));
 
     query = flb_malloc(flb_sds_len(json) + 115);
-    snprintf(query, flb_sds_len(json) + 115, "with json_pack as (select json_array_elements('%s') as json_pack )INSERT INTO fluent_log select * from json_pack;", json);
+    snprintf(query, flb_sds_len(json) + 115, "with json_pack as (select json_array_elements('%s') as json_pack )INSERT INTO %s select * from json_pack;", json, ctx->db_table);
     res = PQexec(ctx->conn, query);
 
     if(PQresultStatus(res) != PGRES_COMMAND_OK) {
