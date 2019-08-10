@@ -94,6 +94,11 @@ static void cb_pgsql_flush(const void *data, size_t bytes,
     flb_sds_t json;
     char *query = NULL;
 
+    if(PQstatus(ctx->conn) != CONNECTION_OK) {
+        PQreset(ctx->conn);
+        FLB_OUTPUT_RETURN(FLB_RETRY);
+    }
+
     json = flb_pack_msgpack_to_json_format(data, bytes,
                                            FLB_PACK_JSON_FORMAT_JSON,
                                            FLB_PACK_JSON_DATE_DOUBLE,
