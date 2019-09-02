@@ -29,6 +29,7 @@
 #define FLB_PGSQL_PORT 5432
 #define FLB_PGSQL_DBNAME "fluentbit"
 #define FLB_PGSQL_TABLE "fluentbit"
+#define FLB_PGSQL_TIMESTAMP_KEY "date"
 
 const PGconn *conn;
 
@@ -38,7 +39,7 @@ struct flb_pgsql_config {
     char *db_hostname;
     char db_port[5];
     const char *db_name;
-    const char *db_table;
+    flb_sds_t db_table;
 
     /* auth */
     const char *db_user;
@@ -46,7 +47,11 @@ struct flb_pgsql_config {
 
     /* pgconn, params, etc */
     PGconn *conn;
+
+    /* time key */
+    flb_sds_t timestamp_key;
 };
 
+void pgsql_conf_destory(struct flb_pgsql_config *ctx);
 
 #endif
