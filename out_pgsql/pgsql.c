@@ -25,16 +25,25 @@
 
 void pgsql_conf_destroy(struct flb_pgsql_config *ctx)
 {
+    PGresult *res = NULL;
+
+    if(PQstatus(ctx->conn) == CONNECTION_OK) {
+        while(PQconsumeInput(ctx->conn) == 0) {
+            res = PQgetResult(ctx->conn);
+            if(PQresultStatus(res) != PGRES_COMMAND_OK) {
+                flb_warn("[out_pgsql] %s", PQerrorMessage(ctx->conn));
+            }
+            PQclear(res);
+        }
+    }
+
     flb_free(ctx->db_hostname);
-    //    flb_free(ctx->db_name);
     flb_sds_destroy(ctx->db_table);
-    // flb_free(ctx->db_user);
-    // flb_free(ctx->db_passwd);
+    flb_sds_destroy(ctx->timestamp_key);
 
     PQfinish(ctx->conn);
 
-    flb_sds_destroy(ctx->timestamp_key);
-
+    free(ctx);
     ctx = NULL;
 }
 
@@ -47,6 +56,7 @@ static int cb_pgsql_init(struct flb_output_instance *ins,
     size_t str_len;
     PGresult *res;
     char *query = NULL;
+    char *temp = NULL;
 
     /* default values just in case */
 
@@ -93,7 +103,7 @@ static int cb_pgsql_init(struct flb_output_instance *ins,
         ctx->timestamp_key = flb_sds_create(FLB_PGSQL_TIMESTAMP_KEY);
     }
 
-    flb_info("[out_pgsql] host=%s port=%s dbname=%s",
+    flb_info("[out_pgsql] host=%s port=%s dbname=%s ...",
              ctx->db_hostname, ctx->db_port, ctx->db_name);
 
     ctx->conn = PQsetdbLogin(ctx->db_hostname,
@@ -116,9 +126,14 @@ static int cb_pgsql_init(struct flb_output_instance *ins,
               ctx->db_hostname, ctx->db_port, ctx->db_name);
     flb_output_set_context(ins, ctx);
 
+    temp = PQescapeIdentifier(ctx->conn, ctx->db_table, flb_sds_len(ctx->db_table));
+    flb_sds_destroy(ctx->db_table);
+    ctx->db_table = flb_strdup(temp);
+    flb_free(temp);
+
     flb_info("[out_pgsql] we check that the table %s exists, if not we create it", ctx->db_table);
 
-    str_len = 40 + flb_sds_len(ctx->db_table);
+    str_len = 62 + flb_sds_len(ctx->db_table);
 
     query = flb_malloc(str_len);
     snprintf(query, str_len, "CREATE TABLE IF NOT EXISTS %s (data json);", ctx->db_table);
@@ -128,6 +143,14 @@ static int cb_pgsql_init(struct flb_output_instance *ins,
     if(PQresultStatus(res) != PGRES_COMMAND_OK) {
         flb_error("[out_pgsql] %s", PQerrorMessage(ctx->conn));
         PQclear(res);
+        return -1;
+    }
+
+    PQclear(res);
+
+    flb_info("[out_pgsql] switching postgresql connection to non-blocking mode");
+    if(PQsetnonblocking(ctx->conn, 1) != 0) {
+        flb_error("[out_pgsql] non-blocking mode not set, not good");
         return -1;
     }
 
@@ -141,11 +164,15 @@ static void cb_pgsql_flush(const void *data, size_t bytes,
                             struct flb_config *config)
 {
     struct flb_pgsql_config *ctx = out_context;
-    PGresult *res;
     flb_sds_t json;
+    PGresult *res = NULL;
+    int result;
     char *query = NULL;
     size_t str_len;
 
+    if(PQconsumeInput(ctx->conn) == 0 && PQisBusy(ctx->conn) == 1) {
+        flb_info("[out_pgsql] Some command may still be running");
+    }
 
     /*
       PQreset()
@@ -165,22 +192,22 @@ static void cb_pgsql_flush(const void *data, size_t bytes,
 
     str_len = 115 + flb_sds_len(json);
 
-
     query = flb_malloc(str_len);
     snprintf(query, str_len,
              "with json_pack as (select json_array_elements('%s') as json_pack )INSERT INTO %s select * from json_pack;",
              json, ctx->db_table);
 
-    res = PQexec(ctx->conn, query);
+    result = PQsendQuery(ctx->conn, query);
     flb_free(query);
+    flb_sds_destroy(json);
 
-    if(PQresultStatus(res) != PGRES_COMMAND_OK) {
-        flb_error("[out_pgsql] %s", PQerrorMessage(ctx->conn));
+    if(PQisBusy(ctx->conn) == 0) {
+        res = PQgetResult(ctx->conn);
+        if(PQresultStatus(res) != PGRES_COMMAND_OK) {
+            flb_warn("[out_pgsql] %s", PQerrorMessage(ctx->conn));
+        }
         PQclear(res);
-        FLB_OUTPUT_RETURN(FLB_ERROR);
     }
-
-    PQclear(res);
 
     FLB_OUTPUT_RETURN(FLB_OK);
 }
