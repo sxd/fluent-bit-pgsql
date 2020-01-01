@@ -185,6 +185,7 @@ static void cb_pgsql_flush(const void *data, size_t bytes,
         FLB_OUTPUT_RETURN(FLB_RETRY);
     }
 
+
     json = flb_pack_msgpack_to_json_format(data, bytes,
                                            FLB_PACK_JSON_FORMAT_JSON,
                                            FLB_PACK_JSON_DATE_DOUBLE,
@@ -200,6 +201,8 @@ static void cb_pgsql_flush(const void *data, size_t bytes,
     result = PQsendQuery(ctx->conn, query);
     flb_free(query);
     flb_sds_destroy(json);
+
+    PQflush(ctx->conn);
 
     if(PQisBusy(ctx->conn) == 0) {
         res = PQgetResult(ctx->conn);
